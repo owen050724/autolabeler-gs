@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "autolabeler-gs"
+version = "0.1.0"
+description = "Automatic dataset labeling tool using GroundingDINO + SAM2 for a computer vision term project."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+authors = [{ name = "AutoLabeler-GS Authors" }]
+keywords = ["computer-vision", "auto-labeling", "GroundingDINO", "SAM2", "YOLO", "COCO"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Topic :: Scientific/Engineering :: Image Recognition",
+]
+dependencies = [
+    "torch>=2.1",
+    "torchvision>=0.16",
+    "transformers>=4.45",
+    "accelerate>=0.30",
+    "opencv-python>=4.8",
+    "pillow>=10.0",
+    "numpy>=1.24",
+    "streamlit>=1.30",
+    "tqdm>=4.65",
+    "pandas>=2.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.4"]
+
+[project.scripts]
+autolabeler = "autolabeler.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["autolabeler*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
