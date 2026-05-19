@@ -179,22 +179,32 @@ mask 수, accepted instance 수, preview 경로, output 경로, 사용 device를
 pytest에서는 실제 모델 다운로드를 요구하지 않습니다.
 실제로 이 스크립트를 성공 실행하지 않았다면 real model 성공을 주장하면 안 됩니다.
 
-## 8. Streamlit GUI
+## 8. Web UI / Streamlit 사용법
 
 ```bash
 streamlit run app.py
 ```
 
-명령 실행 후 브라우저에서 Streamlit이 안내하는 localhost 주소를 열면 웹 UI를 사용할 수
-있습니다. Web UI는 다음 흐름으로 구성되어 있습니다.
+명령 실행 후 브라우저에서 Streamlit이 안내하는 localhost 주소(예:
+`http://localhost:8501`)를 열면 웹 UI를 사용할 수 있습니다. 이 UI는 단순 실행 버튼이
+아니라 업로드, prompt 선택, 결과 검토, 품질 리포트 확인, ZIP 다운로드까지 한 화면에서
+처리하는 localhost annotation tool입니다.
+
+탭 구성:
 
 1. `Upload & Prompt` 탭에서 prompt preset을 선택하거나 직접 class prompt를 입력합니다.
-2. 이미지를 업로드하거나 로컬 이미지 폴더 경로를 입력합니다.
+2. 같은 탭에서 이미지를 업로드하거나 로컬 이미지 폴더 경로를 입력합니다.
 3. `Run Auto Labeling`을 눌러 mock mode 또는 real mode로 자동 라벨링을 실행합니다.
 4. `Results Gallery`에서 preview overlay와 이미지별 instance 요약을 확인합니다.
 5. `Annotation Table`에서 confidence filter와 class filter로 annotation을 검토합니다.
-6. `Quality Report`에서 사람이 먼저 확인해야 할 HIGH priority annotation을 확인합니다.
-7. `Export`에서 생성된 YOLO/COCO/quality report 파일 상태를 확인하고 ZIP을 다운로드합니다.
+6. `Quality Report`에서 사람이 먼저 확인해야 할 HIGH priority annotation과 issue count를 확인합니다.
+7. `Export`에서 생성된 `previews/`, YOLO/COCO 라벨, `quality_report.csv`,
+   `quality_report.md`, ZIP 파일 상태를 확인하고 다운로드합니다.
+
+Mock 모드는 모델 다운로드 없이 UI, exporter, OpenCV 후처리, 품질 리포트 흐름을
+확인하기 위한 dependency-free 테스트 모드입니다. Real 모드는 실제 GroundingDINO/SAM2
+모델 가중치를 사용하므로 `requirements-real.txt`, torch/transformers 호환성, 모델
+다운로드가 가능한 네트워크 환경이 필요합니다.
 
 Streamlit UI 화면을 제출 자료에 넣고 싶다면 실행 후 브라우저에서 직접 캡처해
 `assets/screenshots/streamlit_ui.png` 같은 이름으로 저장하면 됩니다. 자동으로 생성된
@@ -220,7 +230,47 @@ GUI 기능:
 모델 ID, device, mock 모드가 바뀔 때만 heavy model을 다시 로드하도록 구성했습니다.
 threshold나 후처리 슬라이더 변경은 기존 로드 모델을 재사용합니다.
 
-## 9. 출력 형식
+## 9. 무엇을 라벨링할 수 있나?
+
+AutoLabeler-GS는 고정된 클래스만 분류하는 classifier가 아니라, 텍스트 프롬프트 기반
+open-vocabulary detection + segmentation 도구입니다. 사용자가 입력한 영어 명사나 짧은
+객체 설명을 GroundingDINO prompt로 사용하고, 검출된 box를 SAM2 segmentation prompt로
+넘깁니다.
+
+예시 prompt:
+
+| Preset | Prompt examples |
+| --- | --- |
+| Desk objects | `laptop, cup, bottle, mouse, keyboard, book, phone` |
+| Campus objects | `person, chair, desk, laptop, backpack, bottle` |
+| Recycling objects | `plastic bottle, paper cup, can, cardboard box, plastic bag` |
+| Basic objects | `person, dog, cat, bicycle, car, chair, bottle` |
+
+영어 명사 prompt가 대체로 가장 안정적입니다. 아주 작은 객체, 가려진 객체, 반사/투명
+물체, 배경과 색이 비슷한 물체, 특정 브랜드/모델처럼 지나치게 세부적인 prompt는 실패할
+수 있습니다. 자동 생성 라벨은 학습 데이터 초안이며, 실제 학습 전에 사람이 검수해야
+합니다.
+
+## 10. 모델 Wrapper 이상인 점
+
+이 프로젝트는 GroundingDINO와 SAM2를 단순히 한 번 호출하는 wrapper가 아닙니다. 실제
+데이터셋 제작 흐름에 맞게 다음 단계를 추가했습니다.
+
+- OpenCV 기반 mask morphology
+- contour extraction
+- polygon simplification
+- YOLO detection export
+- YOLO segmentation export
+- COCO JSON export
+- Streamlit web UI
+- Annotation Quality Analyzer
+- Review Priority Report
+
+특히 quality report는 confidence와 mask geometry를 사용해 사람이 먼저 검수해야 할
+annotation을 우선순위로 정리합니다. 따라서 프로젝트의 목표는 완전 자동 정답 생성기가
+아니라 human-in-the-loop dataset labeling assistant입니다.
+
+## 11. 출력 형식
 
 CLI와 Streamlit 모두 다음 구조를 생성합니다.
 
@@ -284,7 +334,7 @@ COCO JSON:
   `segmentation`, `iscrowd`
 - `pycocotools` 없이 JSON을 직접 생성합니다.
 
-## 10. Annotation Quality Analyzer
+## 12. Annotation Quality Analyzer
 
 자동 생성 라벨은 학습 데이터 제작을 빠르게 시작하기 위한 초안이므로 사람이 검수해야
 합니다. AutoLabeler-GS는 각 annotation에 대해 confidence와 기하학적 품질 지표를
@@ -312,7 +362,7 @@ assistant로 사용하기 위한 검수 큐 역할을 합니다.
 | laptop_1.jpg | laptop | 0.78 | LOW | - |
 | desk_2.jpg | bottle | 0.31 | HIGH | LOW_CONFIDENCE |
 
-## 11. 데모 절차
+## 13. 데모 절차
 
 ```bash
 python scripts/make_demo_assets.py
@@ -378,6 +428,49 @@ YOLO segmentation, COCO JSON, preview overlay, ZIP archive가 생성되었습니
 
 ![real demo preview 4](assets/screenshots/demo_preview_4.png)
 
+### Keyboard 추가 real-mode 실험
+
+추가로 직접 촬영한 키보드 이미지 4장을 `sample_images/keyboard_*.jpg`로 저장하고
+같은 real-mode pipeline을 실행했습니다. 먼저 단일 이미지 sanity check를 수행했습니다.
+
+```bash
+python scripts/real_model_test.py \
+  --image sample_images/keyboard_1.jpg \
+  --classes "keyboard" \
+  --device auto \
+  --box-threshold 0.30 \
+  --text-threshold 0.20
+```
+
+단일 이미지 결과는 detection 1건, mask 1건, accepted instance 1건이었습니다.
+전체 keyboard 데모는 keyboard 이미지만 별도 입력 폴더로 묶어 실행했습니다.
+
+```bash
+mkdir -p /tmp/autolabeler_keyboard_input
+cp sample_images/keyboard_*.jpg /tmp/autolabeler_keyboard_input/
+
+python -m autolabeler.cli \
+  --images /tmp/autolabeler_keyboard_input \
+  --classes "keyboard" \
+  --out runs/keyboard_demo \
+  --device auto \
+  --box-threshold 0.30 \
+  --text-threshold 0.20
+```
+
+결과는 이미지 4장, accepted instance 4건이었고 `quality_report.md` 기준 평균
+confidence는 0.931이었습니다. Review priority는 LOW 3건, MEDIUM 1건이며
+HIGH priority annotation은 없었습니다. 이 수치는 자동 라벨 품질을 보장하는 값이
+아니라 사람이 먼저 검수할 annotation을 고르기 위한 참고 지표입니다.
+
+![keyboard demo preview 1](assets/screenshots/keyboard_preview_1.png)
+
+![keyboard demo preview 2](assets/screenshots/keyboard_preview_2.png)
+
+![keyboard demo preview 3](assets/screenshots/keyboard_preview_3.png)
+
+![keyboard demo preview 4](assets/screenshots/keyboard_preview_4.png)
+
 YOLO segmentation label 예시:
 
 ```text
@@ -391,7 +484,7 @@ YOLO segmentation label 예시:
 노트북 화면, 얼굴, 문서, 계정 이름, 알림, 사내/학교 비공개 정보가 포함되어 있으면
 공개 전에 이미지를 교체하거나 흐림 처리해야 합니다.
 
-## 12. 실험 계획
+## 14. 실험 계획
 
 1. Threshold 실험
    - `box_threshold`: 0.25, 0.35, 0.50
@@ -411,7 +504,7 @@ YOLO segmentation label 예시:
    - 생성된 YOLO 라벨을 Ultralytics YOLO 학습 데이터셋으로 사용
    - 자동 라벨만 사용한 결과와 사람이 검수한 라벨 결과 비교
 
-## 13. 한계와 주의사항
+## 15. 한계와 주의사항
 
 - 자동 생성 라벨은 반드시 사람이 검수해야 합니다.
 - GroundingDINO는 영어 prompt가 보통 더 잘 동작합니다.
@@ -421,7 +514,7 @@ YOLO segmentation label 예시:
 - 실제 모델 실행에는 torch, transformers, 모델 가중치 다운로드, 네트워크 연결이 필요합니다.
 - Mock 모드는 dependency-free 테스트와 데모용이며 실제 프로젝트 결과로 사용하면 안 됩니다.
 
-## 14. 테스트
+## 16. 테스트
 
 ```bash
 python scripts/smoke_test.py
@@ -431,7 +524,7 @@ python -m autolabeler.cli --images sample_images --classes "object" --out runs/c
 
 테스트는 실제 모델 다운로드를 요구하지 않도록 구성되어 있습니다.
 
-## 15. 제출 전 체크리스트
+## 17. 제출 전 체크리스트
 
 최종 제출 전에 아래 명령을 순서대로 확인합니다.
 
@@ -467,7 +560,7 @@ unzip -l ../autolabeler-gs-source.zip | grep -E '(\.git/|\.venv/|runs/|__pycache
 source ZIP에는 `.git/`, `.venv/`, `runs/`, `__pycache__/`, `.pytest_cache/`, `*.pyc`,
 임시 실행 결과 폴더가 포함되지 않아야 합니다.
 
-## 16. 참고 자료와 라이선스 메모
+## 18. 참고 자료와 라이선스 메모
 
 - GroundingDINO: https://github.com/IDEA-Research/GroundingDINO
 - GroundingDINO paper: https://arxiv.org/abs/2303.05499
