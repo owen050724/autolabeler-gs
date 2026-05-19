@@ -185,17 +185,34 @@ pytest에서는 실제 모델 다운로드를 요구하지 않습니다.
 streamlit run app.py
 ```
 
+명령 실행 후 브라우저에서 Streamlit이 안내하는 localhost 주소를 열면 웹 UI를 사용할 수
+있습니다. Web UI는 다음 흐름으로 구성되어 있습니다.
+
+1. `Upload & Prompt` 탭에서 prompt preset을 선택하거나 직접 class prompt를 입력합니다.
+2. 이미지를 업로드하거나 로컬 이미지 폴더 경로를 입력합니다.
+3. `Run Auto Labeling`을 눌러 mock mode 또는 real mode로 자동 라벨링을 실행합니다.
+4. `Results Gallery`에서 preview overlay와 이미지별 instance 요약을 확인합니다.
+5. `Annotation Table`에서 confidence filter와 class filter로 annotation을 검토합니다.
+6. `Quality Report`에서 사람이 먼저 확인해야 할 HIGH priority annotation을 확인합니다.
+7. `Export`에서 생성된 YOLO/COCO/quality report 파일 상태를 확인하고 ZIP을 다운로드합니다.
+
+Streamlit UI 화면을 제출 자료에 넣고 싶다면 실행 후 브라우저에서 직접 캡처해
+`assets/screenshots/streamlit_ui.png` 같은 이름으로 저장하면 됩니다. 자동으로 생성된
+스크린샷 파일은 저장소에 포함되어 있지 않습니다.
+
 GUI 기능:
 
 - Mock 모드와 real 모드 선택
 - 여러 이미지 업로드
 - 로컬 이미지 폴더 경로 입력
+- prompt preset 선택
 - 클래스 prompt text area
 - box/text/NMS threshold slider
 - morphology, 최소 면적, polygon epsilon 설정
 - `runs/streamlit_YYYYMMDD_HHMMSS/` 아래 timestamped output 생성
 - preview overlay gallery
 - confidence 필터가 적용된 detection table
+- Annotation Quality Report 표시
 - 클래스별 요약 table (`class_name`, `count`, `average_score`)
 - ZIP 다운로드
 - `st.cache_resource`를 이용한 모델 캐싱
