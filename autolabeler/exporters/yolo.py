@@ -19,9 +19,9 @@ def _write_data_yaml(out_dir: Path, class_names: List[str]) -> Path:
     yaml_path = out_dir / "data.yaml"
     names_block = "\n".join(f"  {i}: {name}" for i, name in enumerate(class_names))
     content = (
-        f"path: {out_dir.resolve()}\n"
-        f"train: images\n"
-        f"val: images\n"
+        "path: .\n"
+        "train: images\n"
+        "val: images\n"
         f"names:\n{names_block}\n"
     )
     yaml_path.write_text(content, encoding="utf-8")

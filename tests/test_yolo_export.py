@@ -34,6 +34,14 @@ def _make_result_for_image(image_path: str):
     )
 
 
+def _assert_portable_data_yaml(path: Path):
+    data_yaml = path.read_text(encoding="utf-8")
+    assert "path: ." in data_yaml
+    assert "train: images" in data_yaml
+    assert "val: images" in data_yaml
+    assert str(path.parent.resolve()) not in data_yaml
+
+
 def test_yolo_detection_format(tmp_path: Path):
     res = _make_result()
     out = export_yolo_detection([res], tmp_path / "det", ["a", "b", "dog"])
@@ -45,7 +53,7 @@ def test_yolo_detection_format(tmp_path: Path):
     assert abs(float(parts[2]) - 0.3) < 1e-4
     assert abs(float(parts[3]) - 0.2) < 1e-4
     assert abs(float(parts[4]) - 0.4) < 1e-4
-    assert (out / "data.yaml").exists()
+    _assert_portable_data_yaml(out / "data.yaml")
 
 
 def test_yolo_segmentation_format(tmp_path: Path):
@@ -59,6 +67,7 @@ def test_yolo_segmentation_format(tmp_path: Path):
     # 첫 점: (0.1, 0.1)
     assert abs(coords[0] - 0.1) < 1e-4
     assert abs(coords[1] - 0.1) < 1e-4
+    _assert_portable_data_yaml(out / "data.yaml")
 
 
 def test_yolo_detection_copies_images(tmp_path: Path):
@@ -70,9 +79,7 @@ def test_yolo_detection_copies_images(tmp_path: Path):
     out = export_yolo_detection([res], tmp_path / "det", ["a", "b", "dog"])
 
     assert (out / "images" / "img1.png").exists()
-    data_yaml = (out / "data.yaml").read_text(encoding="utf-8")
-    assert "train: images" in data_yaml
-    assert "val: images" in data_yaml
+    _assert_portable_data_yaml(out / "data.yaml")
 
 
 def test_yolo_segmentation_copies_images(tmp_path: Path):
@@ -84,3 +91,4 @@ def test_yolo_segmentation_copies_images(tmp_path: Path):
     out = export_yolo_segmentation([res], tmp_path / "seg", ["a", "b", "dog"])
 
     assert (out / "images" / "img1.png").exists()
+    _assert_portable_data_yaml(out / "data.yaml")

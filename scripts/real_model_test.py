@@ -57,6 +57,9 @@ def main(argv=None) -> int:
     args = build_parser().parse_args(argv)
     image_path = _resolve_image(args.image)
     if image_path is None:
+        if args.image:
+            print(f"이미지 경로를 찾을 수 없습니다: {args.image}", file=sys.stderr)
+            return 2
         print(
             "테스트할 이미지가 없습니다. sample_images/ 에 실제 사진을 추가하거나 "
             "--image /path/to/image.jpg 를 지정하세요.",
@@ -93,8 +96,14 @@ def main(argv=None) -> int:
         segmenter.load()
         detections = detector.predict(image, class_prompts)
         masks = segmenter.segment(image, detections)
-    except RuntimeError as e:
-        print(f"실제 모델 실행 실패: {e}", file=sys.stderr)
+    except Exception as e:
+        print(f"실제 모델 실행 실패: {type(e).__name__}: {e}", file=sys.stderr)
+        print(
+            "requirements-real.txt 설치, 모델 다운로드 네트워크, torch/transformers/SAM2 "
+            "버전, device 설정을 확인하세요. 성공하지 않은 실행을 real model 성공으로 "
+            "기록하면 안 됩니다.",
+            file=sys.stderr,
+        )
         return 1
 
     instances: list[InstanceAnnotation] = []

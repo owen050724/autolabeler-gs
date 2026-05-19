@@ -103,6 +103,9 @@ GPU가 있으면 PyTorch는 본인 CUDA 버전에 맞는 wheel을 PyTorch 공식
 `--device cuda`, `--device cpu`를 지원합니다. GPU가 권장되지만 CPU fallback도
 제공됩니다. CPU 실행은 매우 느릴 수 있습니다.
 
+이 저장소는 모델 다운로드 없이 검증 가능한 mock mode와, 실제 GroundingDINO/SAM2
+가중치를 내려받아 실행하는 real mode를 모두 제공합니다.
+
 ## 5. Mock 모드
 
 Mock 모드는 모델 다운로드 없이 파이프라인, OpenCV 후처리, exporter, Streamlit UI를
@@ -164,9 +167,11 @@ python -m autolabeler.cli \
 
 ```bash
 python scripts/real_model_test.py \
-  --image sample_images/example.jpg \
-  --classes "person, bottle" \
-  --device auto
+  --image sample_images/laptop_1.jpg \
+  --classes "laptop" \
+  --device auto \
+  --box-threshold 0.30 \
+  --text-threshold 0.20
 ```
 
 출력 위치는 기본적으로 `runs/real_model_test/`입니다. 스크립트는 detection 수,
@@ -244,6 +249,15 @@ YOLO exporter는 기본적으로 원본 이미지를 각 dataset 폴더의 `imag
 경로를 바로 사용할 수 있습니다. 테스트용 synthetic result처럼 원본 파일 경로가 실제
 파일이 아니면 이미지 복사는 건너뛰고 라벨만 생성됩니다.
 
+생성되는 `data.yaml`은 export 폴더를 다른 위치로 옮겨도 사용할 수 있도록 상대 경로를
+사용합니다.
+
+```yaml
+path: .
+train: images
+val: images
+```
+
 COCO JSON:
 
 - 최상위 키: `images`, `annotations`, `categories`
@@ -265,17 +279,6 @@ python -m autolabeler.cli \
   --mock
 ```
 
-보고서나 발표 자료에는 다음 화면을 캡처하면 좋습니다.
-
-| 항목 | README placeholder |
-| --- | --- |
-| 입력 이미지 | `assets/screenshots/input_image.png` |
-| GroundingDINO box 결과 | `assets/screenshots/groundingdino_boxes.png` |
-| SAM2 mask overlay | `assets/screenshots/sam2_mask_overlay.png` |
-| OpenCV polygon overlay | `assets/screenshots/opencv_polygon_overlay.png` |
-| YOLO label 예시 | `assets/screenshots/yolo_label_example.png` |
-| Streamlit 화면 | `assets/screenshots/streamlit_screenshot.png` |
-
 real demo preview를 README assets로 복사하려면:
 
 ```bash
@@ -285,8 +288,8 @@ python scripts/copy_demo_previews.py \
 ```
 
 이 스크립트는 선택한 preview 이미지를 `assets/screenshots/demo_preview_*.png` 형식으로
-복사합니다. 위 placeholder 파일명은 보고서 구성에 맞춰 직접 캡처하거나 이름을 바꿔
-사용하면 됩니다.
+복사합니다. 보고서 구성에 맞춰 직접 캡처한 이미지를 추가하거나 파일명을 바꿔 사용해도
+됩니다.
 
 ### 실제 모델 데모 결과
 
@@ -337,6 +340,10 @@ YOLO segmentation label 예시:
 이 라벨은 자동 생성 초안이므로 실제 학습 데이터로 사용하기 전에는 사람이 box와 mask
 경계를 검수해야 합니다.
 
+공개 저장소에 데모 이미지를 올릴 때는 개인정보가 보이지 않는 사진만 사용해야 합니다.
+노트북 화면, 얼굴, 문서, 계정 이름, 알림, 사내/학교 비공개 정보가 포함되어 있으면
+공개 전에 이미지를 교체하거나 흐림 처리해야 합니다.
+
 ## 11. 실험 계획
 
 1. Threshold 실험
@@ -382,14 +389,16 @@ python -m autolabeler.cli --images sample_images --classes "object" --out runs/c
 최종 제출 전에 아래 명령을 순서대로 확인합니다.
 
 ```bash
-pytest -q
+python scripts/final_check.py
 python scripts/smoke_test.py
+pytest -q
 python -m autolabeler.cli --images sample_images --classes "object" --out runs/cli_mock --mock
 python scripts/real_model_test.py --image sample_images/laptop_1.jpg --classes "laptop" --device auto
 ```
 
-마지막 real model 명령은 `requirements-real.txt` 설치, 실제 이미지, 모델 다운로드가
-가능한 환경에서만 성공합니다. 실패했다면 보고서에는 환경 제약과 실패 원인을 명시하고,
+마지막 real model 명령은 선택 사항이며 환경 의존적입니다. `requirements-real.txt`
+설치, 실제 이미지, 모델 다운로드 네트워크, torch/transformers/SAM2 호환성이 갖춰진
+환경에서만 성공합니다. 실패했다면 보고서에는 환경 제약과 실패 원인을 명시하고,
 real model 성공을 주장하지 않습니다.
 
 제출 ZIP에는 source code와 README, 테스트, 필요한 샘플/스크립트만 포함하고 `.venv/`,
@@ -401,11 +410,15 @@ Git에 커밋된 깨끗한 소스만 ZIP으로 만들려면 `git archive`를 사
 ```bash
 git status --short
 git archive --format=zip --output ../autolabeler-gs-source.zip HEAD
+unzip -l ../autolabeler-gs-source.zip | grep -E '(\.git/|\.venv/|runs/|__pycache__/|\.pytest_cache/|\.pyc$)' || echo "clean zip"
 ```
 
 아직 커밋 전 변경까지 제출 ZIP에 포함해야 한다면 먼저 커밋하거나, 임시로 별도 폴더에
 복사해 `.venv/`와 `runs/`를 제외했는지 확인하세요. `git archive`는 커밋된 파일만
 포함하므로 생성된 실행 결과 폴더가 ZIP에 섞이는 문제를 피할 수 있습니다.
+
+source ZIP에는 `.git/`, `.venv/`, `runs/`, `__pycache__/`, `.pytest_cache/`, `*.pyc`,
+임시 실행 결과 폴더가 포함되지 않아야 합니다.
 
 ## 15. 참고 자료와 라이선스 메모
 
