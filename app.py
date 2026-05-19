@@ -279,11 +279,16 @@ def _top_classes_for_result(result) -> str:
     return ", ".join(f"{name} ({count})" for name, count in counts.most_common(3))
 
 
-def _run_autolabeling(config: AutoLabelConfig, raw_prompts: str, uploaded, folder_path: str) -> None:
+def _run_autolabeling(
+    config: AutoLabelConfig,
+    raw_prompts: str,
+    uploaded,
+    folder_path: str,
+) -> bool:
     class_prompts = parse_class_prompts(raw_prompts)
     if not class_prompts:
         st.error("클래스 프롬프트를 1개 이상 입력해주세요.")
-        return
+        return False
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     out_dir = Path("runs") / f"streamlit_{timestamp}"
@@ -296,7 +301,7 @@ def _run_autolabeling(config: AutoLabelConfig, raw_prompts: str, uploaded, folde
         img_dir = Path(folder_path)
     else:
         st.error("이미지를 업로드하거나 유효한 로컬 폴더 경로를 입력해주세요.")
-        return
+        return False
 
     try:
         pipeline = _get_pipeline(
@@ -311,7 +316,7 @@ def _run_autolabeling(config: AutoLabelConfig, raw_prompts: str, uploaded, folde
     except RuntimeError as e:
         st.error(f"모델 로딩 실패: {e}")
         st.info("Mock 모드를 활성화하면 모델 없이 데모를 실행할 수 있습니다.")
-        return
+        return False
 
     pipeline.config = config
     pipeline.detector.config = config
@@ -333,7 +338,7 @@ def _run_autolabeling(config: AutoLabelConfig, raw_prompts: str, uploaded, folde
         )
     except Exception as e:
         st.error(f"파이프라인 실행 중 오류: {e}")
-        return
+        return False
 
     total_instances = sum(len(r.instances) for r in results)
     st.session_state["results"] = results
@@ -343,6 +348,7 @@ def _run_autolabeling(config: AutoLabelConfig, raw_prompts: str, uploaded, folde
         f"이미지 {len(results)}장 / 인스턴스 {total_instances}건"
     )
     st.success(f"완료: {st.session_state['last_run_summary']}")
+    return True
 
 
 def _render_metric_row(results: list, quality_rows: list[dict]) -> None:
@@ -386,6 +392,8 @@ def main():
     results = _get_results()
     quality_rows = build_quality_report(results) if results else []
     out_dir = _get_out_dir()
+    if results:
+        st.success(f"최근 실행 완료: {st.session_state.get('last_run_summary', '')}")
 
     tab_upload, tab_gallery, tab_table, tab_quality, tab_export = st.tabs(
         [
@@ -428,7 +436,8 @@ def main():
             st.caption("업로드 이미지가 있으면 업로드 파일을 우선 사용합니다.")
 
         if st.button("Run Auto Labeling", type="primary", use_container_width=True):
-            _run_autolabeling(config, raw_prompts, uploaded, folder_path)
+            if _run_autolabeling(config, raw_prompts, uploaded, folder_path):
+                st.rerun()
 
     with tab_gallery:
         if not results:
