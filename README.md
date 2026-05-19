@@ -201,9 +201,7 @@ Mock 모드는 모델 다운로드 없이 UI, exporter, OpenCV 후처리, 품질
 `requirements-real.txt`, torch/transformers 호환성, 모델 다운로드가 가능한 네트워크
 환경이 필요합니다.
 
-Streamlit UI 화면을 제출 자료에 넣고 싶다면 실행 후 브라우저에서 직접 캡처해
-`assets/screenshots/streamlit_ui.png` 같은 이름으로 저장하면 됩니다. 자동으로 생성된
-스크린샷 파일은 저장소에 포함되어 있지 않습니다.
+![Streamlit UI](assets/screenshots/streamlit_ui.png)
 
 GUI 기능:
 
@@ -383,6 +381,11 @@ python scripts/copy_demo_previews.py \
 
 ### 실제 모델 데모 결과
 
+| Demo | Prompt | Images | Accepted instances | Notes |
+| --- | --- | ---: | ---: | --- |
+| Laptop | `laptop` | 4 | 4 | real-mode object segmentation |
+| Keyboard | `keyboard` | 4 | 4 | includes one review-needed mask case |
+
 실제 모델 데모는 직접 촬영한 노트북 이미지 4장을 `sample_images/laptop_*.jpg`로
 저장한 뒤 실행했습니다. prompt는 `"laptop"`만 사용했고, 먼저 한 장으로
 `real_model_test.py`를 실행해 GroundingDINO detection, SAM2 mask, OpenCV polygon
@@ -423,8 +426,10 @@ YOLO segmentation, COCO JSON, preview overlay, ZIP archive가 생성되었습니
 
 ### Keyboard 추가 real-mode 실험
 
-추가로 직접 촬영한 키보드 이미지 4장을 `sample_images/keyboard_*.jpg`로 저장하고
-같은 real-mode pipeline을 실행했습니다. 먼저 단일 이미지 sanity check를 수행했습니다.
+키보드는 laptop에 이어 두 번째 real-mode 객체 카테고리로 추가했습니다. 같은 pipeline을
+다른 물체에도 적용할 수 있는지 확인하기 위해 직접 촬영한 키보드 이미지 4장을
+`sample_images/keyboard_*.jpg`로 저장하고 실행했습니다. 먼저 단일 이미지 sanity check를
+수행했습니다.
 
 ```bash
 python scripts/real_model_test.py \
@@ -453,8 +458,11 @@ python -m autolabeler.cli \
 
 결과는 이미지 4장, accepted instance 4건이었고 `quality_report.md` 기준 평균
 confidence는 0.931이었습니다. Review priority는 LOW 3건, MEDIUM 1건이며
-HIGH priority annotation은 없었습니다. 이 수치는 자동 라벨 품질을 보장하는 값이
-아니라 사람이 먼저 검수할 annotation을 고르기 위한 참고 지표입니다.
+HIGH priority annotation은 없었습니다. 이 결과는 AutoLabeler-GS가 laptop 하나에만
+고정된 도구가 아니라 prompt 기반으로 다른 객체에도 적용될 수 있음을 보여줍니다.
+다만 keyboard 이미지 중 한 사례는 mask가 주변 책상 영역을 일부 포함할 수 있어 검토가
+필요합니다. 이런 경우를 빠르게 찾기 위해 Annotation Quality Analyzer와 Review Priority
+Report를 함께 사용합니다.
 
 ![keyboard demo preview 1](assets/screenshots/keyboard_preview_1.png)
 
