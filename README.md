@@ -2,7 +2,7 @@
 
 **AutoLabeler-GS: Automatic Dataset Labeling Tool with GroundingDINO + SAM2**
 
-대학 컴퓨터비전 학기 프로젝트로 만든 Python 기반 자동 데이터셋 라벨링 도구입니다.
+Python 기반 자동 데이터셋 라벨링 도구입니다.
 사용자가 이미지와 텍스트 클래스 프롬프트를 입력하면 GroundingDINO가 객체 박스를
 찾고, SAM2가 해당 박스를 프롬프트로 사용해 인스턴스 마스크를 생성합니다. 이후
 OpenCV로 마스크를 정리하고 contour를 polygon으로 변환해 YOLO detection,
