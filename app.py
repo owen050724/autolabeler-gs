@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-import shutil
-import tempfile
+from datetime import datetime
 from pathlib import Path
 from typing import List
 
@@ -24,10 +23,10 @@ st.set_page_config(
 
 # ----------------------------------------------------------------------
 @st.cache_resource(show_spinner="모델을 불러오는 중...")
-def _get_pipeline(config_key: tuple, config: AutoLabelConfig) -> AutoLabelPipeline:
+def _get_pipeline(config_key: tuple, _config: AutoLabelConfig) -> AutoLabelPipeline:
     """설정이 바뀌지 않는 한 동일한 파이프라인을 재사용한다."""
 
-    pipeline = AutoLabelPipeline(config)
+    pipeline = AutoLabelPipeline(_config)
     pipeline.load_models()
     return pipeline
 
@@ -103,6 +102,14 @@ def main():
     )
 
     config = sidebar_controls()
+    display_score_threshold = st.sidebar.slider(
+        "결과 표 confidence 필터",
+        0.0,
+        1.0,
+        0.0,
+        0.05,
+        help="검출 결과 표와 클래스별 요약에 표시할 최소 score입니다.",
+    )
 
     st.subheader("1) 클래스 프롬프트")
     raw_prompts = st.text_area(
@@ -136,11 +143,12 @@ def main():
             st.error("클래스 프롬프트를 1개 이상 입력해주세요.")
             return
 
-        work_dir = Path(tempfile.mkdtemp(prefix="autolabeler_"))
-        out_dir = work_dir / "outputs"
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        out_dir = Path("runs") / f"streamlit_{timestamp}"
+        out_dir.mkdir(parents=True, exist_ok=True)
 
         if uploaded:
-            img_dir = work_dir / "images"
+            img_dir = out_dir / "uploaded_images"
             _save_uploaded_files(uploaded, img_dir)
         elif folder_path and Path(folder_path).is_dir():
             img_dir = Path(folder_path)
@@ -156,7 +164,7 @@ def main():
                     config.device,
                     config.mock_mode,
                 ),
-                config=config,
+                _config=config,
             )
         except RuntimeError as e:
             st.error(f"모델 로딩 실패: {e}")
@@ -200,7 +208,7 @@ def main():
                     st.image(
                         res.preview_path,
                         caption=Path(res.image_path).name,
-                        use_column_width=True,
+                        use_container_width=True,
                     )
                 else:
                     st.write(f"(미리보기 없음) {Path(res.image_path).name}")
@@ -210,6 +218,8 @@ def main():
         rows = []
         for res in results:
             for inst in res.instances:
+                if inst.score < display_score_threshold:
+                    continue
                 rows.append(
                     {
                         "image": Path(res.image_path).name,
@@ -220,14 +230,31 @@ def main():
                     }
                 )
         if rows:
+            summary = []
+            by_class = {}
+            for row in rows:
+                bucket = by_class.setdefault(row["class"], [])
+                bucket.append(float(row["score"]))
+            for class_name, scores in sorted(by_class.items()):
+                summary.append(
+                    {
+                        "class_name": class_name,
+                        "count": len(scores),
+                        "average_score": round(sum(scores) / len(scores), 3),
+                    }
+                )
+            st.caption(f"표시 confidence threshold: {display_score_threshold:.2f}")
+            st.dataframe(summary, use_container_width=True)
             st.dataframe(rows, use_container_width=True)
         else:
-            st.info("검출된 객체가 없습니다.")
+            st.info("표시 조건을 만족하는 검출 객체가 없습니다.")
 
         # 다운로드
         st.subheader("5) 결과 다운로드")
         try:
-            zip_path = make_zip(out_dir, work_dir / "autolabels.zip")
+            zip_path = out_dir / "autolabeler_output.zip"
+            if not zip_path.exists():
+                zip_path = make_zip(out_dir, zip_path)
             with open(zip_path, "rb") as f:
                 st.download_button(
                     "라벨 ZIP 다운로드",
@@ -238,10 +265,7 @@ def main():
         except Exception as e:
             st.warning(f"ZIP 생성 실패: {e}")
 
-        st.caption(
-            "임시 작업 디렉터리: "
-            f"`{work_dir}` (Streamlit 재시작 시 자동 정리되지 않을 수 있습니다)."
-        )
+        st.caption(f"출력 디렉터리: `{out_dir}`")
 
 
 if __name__ == "__main__":  # pragma: no cover

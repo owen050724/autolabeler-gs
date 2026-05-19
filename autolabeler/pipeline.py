@@ -10,7 +10,12 @@ import numpy as np
 
 from .config import AutoLabelConfig
 from .datatypes import ImageAnnotationResult, InstanceAnnotation
-from .exporters import export_coco, export_yolo_detection, export_yolo_segmentation
+from .exporters import (
+    export_coco,
+    export_yolo_detection,
+    export_yolo_segmentation,
+    make_zip,
+)
 from .models import GroundingDINODetector, SAM2Segmenter
 from .postprocess import clean_mask, mask_to_polygons, polygon_area
 from .utils import ensure_dir, list_image_files, load_image_rgb, parse_class_prompts
@@ -50,6 +55,13 @@ class AutoLabelPipeline:
 
         detections = self.detector.predict(image, class_prompts)
         masks = self.segmenter.segment(image, detections) if detections else []
+        if len(masks) != len(detections):
+            log.warning(
+                "검출 수(%d)와 마스크 수(%d)가 다릅니다: %s",
+                len(detections),
+                len(masks),
+                image_path.name,
+            )
 
         instances: List[InstanceAnnotation] = []
         for det, mask in zip(detections, masks):
@@ -159,6 +171,10 @@ class AutoLabelPipeline:
             export_yolo_segmentation(results, out_dir / "yolo_seg", class_names)
         if "coco" in self.config.output_formats:
             export_coco(results, out_dir / "coco" / "annotations.json", class_names)
+        try:
+            make_zip(out_dir, out_dir / "autolabeler_output.zip")
+        except Exception as e:  # pragma: no cover - 파일 시스템 환경 의존
+            log.warning("ZIP archive 생성 실패: %s", e)
 
 
 __all__ = ["AutoLabelPipeline"]

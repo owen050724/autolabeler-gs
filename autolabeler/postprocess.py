@@ -50,6 +50,7 @@ def mask_to_polygons(
     else:
         binary = (mask > 0).astype(np.uint8) * 255
 
+    height, width = binary.shape[:2]
     contours, _ = cv2.findContours(
         binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE
     )
@@ -66,7 +67,13 @@ def mask_to_polygons(
         approx = cv2.approxPolyDP(cnt, eps, True)
         if approx is None or len(approx) < 3:
             continue
-        poly = [[float(p[0][0]), float(p[0][1])] for p in approx]
+        poly = []
+        for p in approx:
+            x = max(0.0, min(float(p[0][0]), float(width - 1)))
+            y = max(0.0, min(float(p[0][1]), float(height - 1)))
+            poly.append([x, y])
+        if len(poly) < 3 or polygon_area(poly) < float(min_area):
+            continue
         polygons.append(poly)
 
     return polygons
@@ -106,23 +113,30 @@ def xyxy_to_yolo_xywh(
 ) -> Tuple[float, float, float, float]:
     """xyxy 픽셀 좌표 -> 정규화된 YOLO (cx, cy, w, h)."""
 
-    x1, y1, x2, y2 = box
+    if width <= 0 or height <= 0:
+        raise ValueError("width/height must be positive")
+
+    x1, y1, x2, y2 = clamp_box_xyxy(box, width, height)
     bw = max(0.0, float(x2) - float(x1))
     bh = max(0.0, float(y2) - float(y1))
     cx = float(x1) + bw / 2.0
     cy = float(y1) + bh / 2.0
-    return (
+    values = (
         cx / float(width),
         cy / float(height),
         bw / float(width),
         bh / float(height),
     )
+    return tuple(min(1.0, max(0.0, v)) for v in values)  # type: ignore[return-value]
 
 
 def normalize_polygon(
     polygon: Sequence[Sequence[float]], width: int, height: int
 ) -> List[float]:
     """폴리곤을 [x1, y1, x2, y2, ...] 정규화 1D 리스트로 변환."""
+
+    if width <= 0 or height <= 0:
+        raise ValueError("width/height must be positive")
 
     flat: List[float] = []
     for x, y in polygon:

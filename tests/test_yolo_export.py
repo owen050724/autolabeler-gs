@@ -1,5 +1,7 @@
 from pathlib import Path
 
+from PIL import Image
+
 from autolabeler.datatypes import ImageAnnotationResult, InstanceAnnotation
 from autolabeler.exporters.yolo import (
     export_yolo_detection,
@@ -8,9 +10,13 @@ from autolabeler.exporters.yolo import (
 
 
 def _make_result():
+    return _make_result_for_image("img1.png")
+
+
+def _make_result_for_image(image_path: str):
     inst = InstanceAnnotation(
         image_id=0,
-        image_path="img1.png",
+        image_path=image_path,
         class_id=2,
         class_name="dog",
         prompt="dog",
@@ -21,7 +27,7 @@ def _make_result():
     )
     return ImageAnnotationResult(
         image_id=0,
-        image_path="img1.png",
+        image_path=image_path,
         width=1000,
         height=1000,
         instances=[inst],
@@ -53,3 +59,28 @@ def test_yolo_segmentation_format(tmp_path: Path):
     # 첫 점: (0.1, 0.1)
     assert abs(coords[0] - 0.1) < 1e-4
     assert abs(coords[1] - 0.1) < 1e-4
+
+
+def test_yolo_detection_copies_images(tmp_path: Path):
+    src = tmp_path / "src" / "img1.png"
+    src.parent.mkdir()
+    Image.new("RGB", (10, 10), (255, 255, 255)).save(src)
+    res = _make_result_for_image(str(src))
+
+    out = export_yolo_detection([res], tmp_path / "det", ["a", "b", "dog"])
+
+    assert (out / "images" / "img1.png").exists()
+    data_yaml = (out / "data.yaml").read_text(encoding="utf-8")
+    assert "train: images" in data_yaml
+    assert "val: images" in data_yaml
+
+
+def test_yolo_segmentation_copies_images(tmp_path: Path):
+    src = tmp_path / "src" / "img1.png"
+    src.parent.mkdir()
+    Image.new("RGB", (10, 10), (255, 255, 255)).save(src)
+    res = _make_result_for_image(str(src))
+
+    out = export_yolo_segmentation([res], tmp_path / "seg", ["a", "b", "dog"])
+
+    assert (out / "images" / "img1.png").exists()

@@ -32,7 +32,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--box-threshold", type=float, default=0.35)
     p.add_argument("--text-threshold", type=float, default=0.25)
     p.add_argument("--nms-iou-threshold", type=float, default=0.5)
-    p.add_argument("--device", default="auto")
+    p.add_argument("--device", default="auto", choices=["auto", "cuda", "cpu"])
     p.add_argument("--mock", action="store_true", help="모델 다운로드 없이 mock 실행")
     p.add_argument(
         "--no-morphology",
@@ -45,6 +45,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--formats",
         nargs="+",
         default=["yolo-seg", "yolo-det", "coco"],
+        choices=["yolo-seg", "yolo-det", "coco"],
         help="출력 포맷 (yolo-seg, yolo-det, coco)",
     )
     p.add_argument("--verbose", "-v", action="store_true")
@@ -74,16 +75,25 @@ def main(argv=None) -> int:
     )
 
     pipeline = AutoLabelPipeline(config)
-    results = pipeline.process_folder(
-        image_dir=Path(args.images),
-        raw_prompts=args.classes,
-        out_dir=Path(args.out),
-    )
+    try:
+        results = pipeline.process_folder(
+            image_dir=Path(args.images),
+            raw_prompts=args.classes,
+            out_dir=Path(args.out),
+        )
+    except Exception as e:
+        if args.verbose:
+            logging.exception("실행 실패")
+        print(f"오류: {e}", file=sys.stderr)
+        return 1
 
     total_inst = sum(len(r.instances) for r in results)
     print(
         f"완료: 이미지 {len(results)}장, 인스턴스 {total_inst}건 -> {args.out}"
     )
+    zip_path = Path(args.out) / "autolabeler_output.zip"
+    if zip_path.exists():
+        print(f"ZIP: {zip_path}")
     return 0
 
 

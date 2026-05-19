@@ -1,0 +1,10 @@
+-r requirements.txt
+
+torch>=2.1
+torchvision>=0.16
+transformers>=4.56
+accelerate>=0.30
+huggingface-hub>=0.24
+
+# Optional fallback backend for SAM2 if Transformers SAM2 is unavailable:
+# git+https://github.com/facebookresearch/sam2.git

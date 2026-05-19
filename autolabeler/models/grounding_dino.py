@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Dict, List
+from typing import Dict, List, Sequence
 
 import numpy as np
 from PIL import Image
@@ -18,7 +18,18 @@ def _best_class_match(label_text: str, class_prompts: List[Dict]) -> Dict:
     if not class_prompts:
         return {"class_id": -1, "class_name": label_text, "prompt": label_text}
 
-    label_low = (label_text or "").strip().lower()
+    if hasattr(label_text, "item"):
+        try:
+            label_text = label_text.item()
+        except Exception:
+            pass
+
+    if isinstance(label_text, (int, np.integer)):
+        idx = int(label_text)
+        if 0 <= idx < len(class_prompts):
+            return class_prompts[idx]
+
+    label_low = str(label_text or "").strip().lower()
 
     # 1) 정확 일치 (class_name)
     for c in class_prompts:
@@ -53,6 +64,26 @@ def _best_class_match(label_text: str, class_prompts: List[Dict]) -> Dict:
     return class_prompts[0]
 
 
+def _clean_prompt(prompt: str) -> str:
+    """GroundingDINO에 넘길 단일 prompt를 정리한다."""
+
+    return str(prompt).strip().strip(".").lower()
+
+
+def _format_grounding_prompts(class_prompts: Sequence[Dict]) -> List[List[str]]:
+    """Transformers GroundingDINO 권장 형식인 batch 단위 prompt 리스트."""
+
+    prompts = [_clean_prompt(c["prompt"]) for c in class_prompts if c.get("prompt")]
+    return [prompts]
+
+
+def _format_grounding_prompt_string(class_prompts: Sequence[Dict]) -> str:
+    """구버전 Transformers fallback용 마침표 구분 prompt 문자열."""
+
+    prompts = _format_grounding_prompts(class_prompts)[0]
+    return ". ".join(prompts) + "." if prompts else ""
+
+
 class GroundingDINODetector:
     """GroundingDINO 박스 디텍터."""
 
@@ -69,7 +100,7 @@ class GroundingDINODetector:
             return
 
         try:
-            import torch  # noqa: F401
+            import torch
             from transformers import (
                 AutoModelForZeroShotObjectDetection,
                 AutoProcessor,
@@ -77,9 +108,16 @@ class GroundingDINODetector:
         except Exception as e:  # pragma: no cover - 환경 의존
             raise RuntimeError(
                 "GroundingDINO 로딩 실패: transformers / torch 가 필요합니다. "
-                "requirements.txt 를 설치하거나 mock_mode 를 사용하세요. "
+                "requirements-real.txt 를 설치하거나 mock_mode 를 사용하세요. "
                 f"원본 오류: {e}"
             ) from e
+
+        if self.device == "cuda" and not torch.cuda.is_available():
+            raise RuntimeError(
+                "GroundingDINO 로딩 실패: --device cuda 가 지정되었지만 "
+                "현재 환경에서 CUDA를 사용할 수 없습니다. --device auto 또는 "
+                "--device cpu 를 사용하세요."
+            )
 
         self.processor = AutoProcessor.from_pretrained(self.config.det_model_id)
         self.model = AutoModelForZeroShotObjectDetection.from_pretrained(
@@ -95,40 +133,68 @@ class GroundingDINODetector:
         if not class_prompts:
             return []
 
-        if self.config.mock_mode or self.model is None:
+        if not self._loaded:
+            self.load()
+
+        if self.config.mock_mode:
             return self._mock_predict(image, class_prompts)
+        if self.model is None or self.processor is None:
+            raise RuntimeError("GroundingDINO 모델이 로드되지 않았습니다.")
 
         import torch
 
-        # GroundingDINO 는 ". " 로 구분된 prompt 또는 nested list[str] 를 받는다.
-        phrases = [c["prompt"].strip().lower() for c in class_prompts]
-        text = ". ".join(phrases) + "."
+        text_prompts = _format_grounding_prompts(class_prompts)
+        if not text_prompts[0]:
+            return []
 
-        inputs = self.processor(images=image, text=text, return_tensors="pt").to(
-            self.device
-        )
+        try:
+            inputs = self.processor(
+                images=image,
+                text=text_prompts,
+                return_tensors="pt",
+            ).to(self.device)
+        except Exception:
+            # 일부 구버전은 nested list prompt 처리가 불안정해서 문장형 prompt로 재시도한다.
+            inputs = self.processor(
+                images=image,
+                text=_format_grounding_prompt_string(class_prompts),
+                return_tensors="pt",
+            ).to(self.device)
 
         with torch.no_grad():
             outputs = self.model(**inputs)
 
-        target_sizes = torch.tensor([image.size[::-1]])  # (H, W)
+        target_sizes = [image.size[::-1]]  # (H, W)
+        input_ids = getattr(inputs, "input_ids", None)
+        if input_ids is None:
+            input_ids = inputs.get("input_ids")
+
         try:
             results = self.processor.post_process_grounded_object_detection(
                 outputs,
-                inputs.input_ids,
-                box_threshold=self.config.box_threshold,
-                text_threshold=self.config.text_threshold,
-                target_sizes=target_sizes,
-            )
-        except TypeError:
-            # 일부 transformers 버전은 인자명이 다를 수 있어 fallback
-            results = self.processor.post_process_grounded_object_detection(
-                outputs,
-                inputs.input_ids,
+                input_ids,
                 threshold=self.config.box_threshold,
                 text_threshold=self.config.text_threshold,
                 target_sizes=target_sizes,
+                text_labels=text_prompts,
             )
+        except TypeError:
+            try:
+                results = self.processor.post_process_grounded_object_detection(
+                    outputs,
+                    input_ids,
+                    threshold=self.config.box_threshold,
+                    text_threshold=self.config.text_threshold,
+                    target_sizes=target_sizes,
+                )
+            except TypeError:
+                results = self.processor.post_process_grounded_object_detection(
+                    outputs,
+                    input_ids,
+                    box_threshold=self.config.box_threshold,
+                    text_threshold=self.config.text_threshold,
+                    target_sizes=target_sizes,
+                )
 
         if not results:
             return []
@@ -136,9 +202,11 @@ class GroundingDINODetector:
 
         boxes = result.get("boxes")
         scores = result.get("scores")
-        labels = result.get("labels") or result.get("text_labels") or []
+        labels = result.get("text_labels", None)
+        if labels is None:
+            labels = result.get("labels", [])
 
-        if boxes is None or len(boxes) == 0:
+        if boxes is None or scores is None or len(boxes) == 0:
             return []
 
         boxes_np = boxes.detach().cpu().numpy()
@@ -147,18 +215,21 @@ class GroundingDINODetector:
         W, H = image.size
         detections: List[DetectionBox] = []
         for i in range(len(boxes_np)):
-            label_text = str(labels[i]) if i < len(labels) else ""
+            label_text = labels[i] if i < len(labels) else ""
             cls = _best_class_match(label_text, class_prompts)
             x1, y1, x2, y2 = boxes_np[i].tolist()
             x1, y1, x2, y2 = clamp_box_xyxy((x1, y1, x2, y2), W, H)
             if x2 - x1 < 1 or y2 - y1 < 1:
+                continue
+            score = float(scores_np[i])
+            if not np.isfinite(score):
                 continue
             detections.append(
                 DetectionBox(
                     class_id=int(cls["class_id"]),
                     class_name=str(cls["class_name"]),
                     prompt=str(cls["prompt"]),
-                    score=float(scores_np[i]),
+                    score=score,
                     box_xyxy=(float(x1), float(y1), float(x2), float(y2)),
                 )
             )

@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import List
 
+SUPPORTED_DEVICES = {"auto", "cuda", "cpu"}
+
 
 @dataclass
 class AutoLabelConfig:
@@ -32,8 +34,15 @@ class AutoLabelConfig:
     def resolved_device(self) -> str:
         """auto 옵션을 실제 디바이스 문자열로 풀어준다."""
 
-        if self.device != "auto":
-            return self.device
+        requested = str(self.device).strip().lower()
+        if requested not in SUPPORTED_DEVICES:
+            raise ValueError(
+                "device 는 'auto', 'cuda', 'cpu' 중 하나여야 합니다. "
+                f"입력값: {self.device}"
+            )
+
+        if requested != "auto":
+            return requested
         try:
             import torch  # local import to avoid hard dependency in mock mode
 

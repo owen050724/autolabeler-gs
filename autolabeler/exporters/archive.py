@@ -17,9 +17,12 @@ def make_zip(output_dir: Path, zip_path: Path | None = None) -> Path:
         zip_path = output_dir.with_suffix(".zip")
     zip_path = Path(zip_path)
     zip_path.parent.mkdir(parents=True, exist_ok=True)
+    zip_resolved = zip_path.resolve()
 
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
         for p in output_dir.rglob("*"):
             if p.is_file():
+                if p.resolve() == zip_resolved:
+                    continue
                 zf.write(p, p.relative_to(output_dir))
     return zip_path

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 from typing import Iterable, List
 
@@ -27,15 +28,33 @@ def _write_data_yaml(out_dir: Path, class_names: List[str]) -> Path:
     return yaml_path
 
 
+def _copy_source_images(results: Iterable[ImageAnnotationResult], out_dir: Path) -> None:
+    """YOLO dataset 구조에 맞춰 원본 이미지를 images/ 아래 복사한다."""
+
+    images_dir = ensure_dir(out_dir / "images")
+    for res in results:
+        src = Path(res.image_path)
+        if not src.is_file():
+            continue
+        dst = images_dir / src.name
+        if src.resolve() == dst.resolve():
+            continue
+        shutil.copy2(src, dst)
+
+
 def export_yolo_detection(
     results: Iterable[ImageAnnotationResult],
     out_dir: Path,
     class_names: List[str],
+    copy_images: bool = True,
 ) -> Path:
     """YOLO detection 라벨(class cx cy w h)을 labels/ 폴더에 저장."""
 
+    results = list(results)
     out_dir = ensure_dir(Path(out_dir))
     labels_dir = ensure_dir(out_dir / "labels")
+    if copy_images:
+        _copy_source_images(results, out_dir)
 
     for res in results:
         lines: List[str] = []
@@ -58,11 +77,15 @@ def export_yolo_segmentation(
     results: Iterable[ImageAnnotationResult],
     out_dir: Path,
     class_names: List[str],
+    copy_images: bool = True,
 ) -> Path:
     """YOLO segmentation 라벨(class x1 y1 x2 y2 ...) 저장."""
 
+    results = list(results)
     out_dir = ensure_dir(Path(out_dir))
     labels_dir = ensure_dir(out_dir / "labels")
+    if copy_images:
+        _copy_source_images(results, out_dir)
 
     for res in results:
         lines: List[str] = []
