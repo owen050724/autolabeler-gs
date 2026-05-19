@@ -18,6 +18,7 @@ from .exporters import (
 )
 from .models import GroundingDINODetector, SAM2Segmenter
 from .postprocess import clean_mask, mask_to_polygons, polygon_area
+from .quality import export_quality_report
 from .utils import ensure_dir, list_image_files, load_image_rgb, parse_class_prompts
 from .visualize import draw_overlay
 
@@ -171,6 +172,7 @@ class AutoLabelPipeline:
             export_yolo_segmentation(results, out_dir / "yolo_seg", class_names)
         if "coco" in self.config.output_formats:
             export_coco(results, out_dir / "coco" / "annotations.json", class_names)
+        export_quality_report(results, out_dir)
         try:
             make_zip(out_dir, out_dir / "autolabeler_output.zip")
         except Exception as e:  # pragma: no cover - 파일 시스템 환경 의존

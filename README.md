@@ -225,6 +225,8 @@ runs/<run_name>/
 │     └─ *.txt
 ├─ coco/
 │  └─ annotations.json
+├─ quality_report.csv
+├─ quality_report.md
 └─ autolabeler_output.zip
 ```
 
@@ -265,7 +267,35 @@ COCO JSON:
   `segmentation`, `iscrowd`
 - `pycocotools` 없이 JSON을 직접 생성합니다.
 
-## 10. 데모 절차
+## 10. Annotation Quality Analyzer
+
+자동 생성 라벨은 학습 데이터 제작을 빠르게 시작하기 위한 초안이므로 사람이 검수해야
+합니다. AutoLabeler-GS는 각 annotation에 대해 confidence와 기하학적 품질 지표를
+계산해 사람이 먼저 확인해야 할 라벨을 우선순위로 정리합니다.
+
+품질 분석은 GroundingDINO confidence, bbox 면적, OpenCV contour에서 만들어진 polygon
+면적, bbox 대비 mask 면적 비율, polygon 점 수를 사용합니다. 결과는
+`quality_report.csv`와 `quality_report.md`로 저장되며, ZIP 결과에도 함께 포함됩니다.
+이 리포트는 프로젝트를 완전 자동 라벨러가 아니라 human-in-the-loop dataset labeling
+assistant로 사용하기 위한 검수 큐 역할을 합니다.
+
+대표 issue flag:
+
+- `LOW_CONFIDENCE`: detection confidence가 낮음
+- `TINY_MASK`: 이미지 대비 mask 면적이 너무 작음
+- `HUGE_MASK`: 이미지 대부분을 mask로 잡음
+- `MASK_BOX_MISMATCH`: bbox 면적과 polygon 면적 비율이 부자연스러움
+- `TOO_FEW_POLYGON_POINTS`: polygon 점 수가 너무 적음
+- `TOO_MANY_POLYGON_POINTS`: polygon이 지나치게 복잡함
+
+예시:
+
+| image | class | score | priority | issues |
+| --- | --- | ---: | --- | --- |
+| laptop_1.jpg | laptop | 0.78 | LOW | - |
+| desk_2.jpg | bottle | 0.31 | HIGH | LOW_CONFIDENCE |
+
+## 11. 데모 절차
 
 ```bash
 python scripts/make_demo_assets.py
@@ -344,7 +374,7 @@ YOLO segmentation label 예시:
 노트북 화면, 얼굴, 문서, 계정 이름, 알림, 사내/학교 비공개 정보가 포함되어 있으면
 공개 전에 이미지를 교체하거나 흐림 처리해야 합니다.
 
-## 11. 실험 계획
+## 12. 실험 계획
 
 1. Threshold 실험
    - `box_threshold`: 0.25, 0.35, 0.50
@@ -364,7 +394,7 @@ YOLO segmentation label 예시:
    - 생성된 YOLO 라벨을 Ultralytics YOLO 학습 데이터셋으로 사용
    - 자동 라벨만 사용한 결과와 사람이 검수한 라벨 결과 비교
 
-## 12. 한계와 주의사항
+## 13. 한계와 주의사항
 
 - 자동 생성 라벨은 반드시 사람이 검수해야 합니다.
 - GroundingDINO는 영어 prompt가 보통 더 잘 동작합니다.
@@ -374,7 +404,7 @@ YOLO segmentation label 예시:
 - 실제 모델 실행에는 torch, transformers, 모델 가중치 다운로드, 네트워크 연결이 필요합니다.
 - Mock 모드는 dependency-free 테스트와 데모용이며 실제 프로젝트 결과로 사용하면 안 됩니다.
 
-## 13. 테스트
+## 14. 테스트
 
 ```bash
 python scripts/smoke_test.py
@@ -384,7 +414,7 @@ python -m autolabeler.cli --images sample_images --classes "object" --out runs/c
 
 테스트는 실제 모델 다운로드를 요구하지 않도록 구성되어 있습니다.
 
-## 14. 제출 전 체크리스트
+## 15. 제출 전 체크리스트
 
 최종 제출 전에 아래 명령을 순서대로 확인합니다.
 
@@ -420,7 +450,7 @@ unzip -l ../autolabeler-gs-source.zip | grep -E '(\.git/|\.venv/|runs/|__pycache
 source ZIP에는 `.git/`, `.venv/`, `runs/`, `__pycache__/`, `.pytest_cache/`, `*.pyc`,
 임시 실행 결과 폴더가 포함되지 않아야 합니다.
 
-## 15. 참고 자료와 라이선스 메모
+## 16. 참고 자료와 라이선스 메모
 
 - GroundingDINO: https://github.com/IDEA-Research/GroundingDINO
 - GroundingDINO paper: https://arxiv.org/abs/2303.05499

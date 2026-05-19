@@ -51,6 +51,8 @@ EXPECTED_MOCK_OUTPUTS = [
     "yolo_seg/images",
     "yolo_seg/labels",
     "coco/annotations.json",
+    "quality_report.csv",
+    "quality_report.md",
     "autolabeler_output.zip",
 ]
 

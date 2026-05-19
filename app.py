@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from datetime import datetime
 from pathlib import Path
 from typing import List
@@ -11,6 +12,7 @@ import streamlit as st
 from autolabeler.config import AutoLabelConfig
 from autolabeler.exporters.archive import make_zip
 from autolabeler.pipeline import AutoLabelPipeline
+from autolabeler.quality import build_quality_report
 from autolabeler.utils import parse_class_prompts
 
 
@@ -249,8 +251,48 @@ def main():
         else:
             st.info("표시 조건을 만족하는 검출 객체가 없습니다.")
 
+        st.subheader("5) Annotation Quality Report")
+        quality_rows = build_quality_report(results)
+        if quality_rows:
+            priority_counts = Counter(row["review_priority"] for row in quality_rows)
+            issue_counts = Counter(issue for row in quality_rows for issue in row["issues"])
+            high_rows = [
+                {
+                    "image": Path(row["image_path"]).name,
+                    "class": row["class_name"],
+                    "score": round(float(row["score"]), 3),
+                    "priority": row["review_priority"],
+                    "issues": ", ".join(row["issues"]) if row["issues"] else "-",
+                }
+                for row in quality_rows
+                if row["review_priority"] == "HIGH"
+            ]
+
+            st.caption("confidence와 mask geometry 기반 검수 우선순위입니다.")
+            st.dataframe(
+                [
+                    {"review_priority": key, "count": priority_counts[key]}
+                    for key in sorted(priority_counts)
+                ],
+                use_container_width=True,
+            )
+            if issue_counts:
+                st.dataframe(
+                    [
+                        {"issue": key, "count": issue_counts[key]}
+                        for key in sorted(issue_counts)
+                    ],
+                    use_container_width=True,
+                )
+            if high_rows:
+                st.dataframe(high_rows, use_container_width=True)
+            else:
+                st.info("HIGH priority 어노테이션이 없습니다.")
+        else:
+            st.info("품질 분석 대상 어노테이션이 없습니다.")
+
         # 다운로드
-        st.subheader("5) 결과 다운로드")
+        st.subheader("6) 결과 다운로드")
         try:
             zip_path = out_dir / "autolabeler_output.zip"
             if not zip_path.exists():

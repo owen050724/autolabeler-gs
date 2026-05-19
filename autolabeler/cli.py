@@ -92,6 +92,12 @@ def main(argv=None) -> int:
         f"완료: 이미지 {len(results)}장, 인스턴스 {total_inst}건 -> {args.out}"
     )
     zip_path = Path(args.out) / "autolabeler_output.zip"
+    quality_csv = Path(args.out) / "quality_report.csv"
+    quality_md = Path(args.out) / "quality_report.md"
+    if quality_csv.exists() and quality_md.exists():
+        print("Quality report:")
+        print(f"  {quality_csv}")
+        print(f"  {quality_md}")
     if zip_path.exists():
         print(f"ZIP: {zip_path}")
     return 0
