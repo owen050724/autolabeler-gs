@@ -288,6 +288,55 @@ python scripts/copy_demo_previews.py \
 복사합니다. 위 placeholder 파일명은 보고서 구성에 맞춰 직접 캡처하거나 이름을 바꿔
 사용하면 됩니다.
 
+### 실제 모델 데모 결과
+
+실제 모델 데모는 직접 촬영한 노트북 이미지 4장을 `sample_images/laptop_*.jpg`로
+저장한 뒤 실행했습니다. prompt는 `"laptop"`만 사용했고, 먼저 한 장으로
+`real_model_test.py`를 실행해 GroundingDINO detection, SAM2 mask, OpenCV polygon
+변환이 모두 이어지는지 확인했습니다.
+
+```bash
+python scripts/real_model_test.py \
+  --image sample_images/laptop_1.jpg \
+  --classes "laptop" \
+  --device auto \
+  --box-threshold 0.30 \
+  --text-threshold 0.20
+```
+
+한 장 sanity check 결과는 detection 1건, mask 1건, accepted instance 1건이었습니다.
+그 다음 전체 4장을 대상으로 threshold를 조정해 false positive를 줄인 설정을 사용했습니다.
+
+```bash
+python -m autolabeler.cli \
+  --images sample_images \
+  --classes "laptop" \
+  --out runs/real_demo_t045 \
+  --device auto \
+  --box-threshold 0.45 \
+  --text-threshold 0.30
+```
+
+최종 real demo 결과는 이미지 4장, accepted instance 4건이며 YOLO detection,
+YOLO segmentation, COCO JSON, preview overlay, ZIP archive가 생성되었습니다.
+
+![real demo preview 1](assets/screenshots/demo_preview_1.png)
+
+![real demo preview 2](assets/screenshots/demo_preview_2.png)
+
+![real demo preview 3](assets/screenshots/demo_preview_3.png)
+
+![real demo preview 4](assets/screenshots/demo_preview_4.png)
+
+YOLO segmentation label 예시:
+
+```text
+0 0.681250 0.051042 0.228125 0.066667 0.141406 0.091667 ...
+```
+
+이 라벨은 자동 생성 초안이므로 실제 학습 데이터로 사용하기 전에는 사람이 box와 mask
+경계를 검수해야 합니다.
+
 ## 11. 실험 계획
 
 1. Threshold 실험
@@ -336,7 +385,7 @@ python -m autolabeler.cli --images sample_images --classes "object" --out runs/c
 pytest -q
 python scripts/smoke_test.py
 python -m autolabeler.cli --images sample_images --classes "object" --out runs/cli_mock --mock
-python scripts/real_model_test.py --image sample_images/example.jpg --classes "person, bottle" --device auto
+python scripts/real_model_test.py --image sample_images/laptop_1.jpg --classes "laptop" --device auto
 ```
 
 마지막 real model 명령은 `requirements-real.txt` 설치, 실제 이미지, 모델 다운로드가

@@ -31,6 +31,10 @@ def main(argv=None) -> int:
     args = build_parser().parse_args(argv)
     source = Path(args.source)
     target = Path(args.target)
+    if not source.is_absolute():
+        source = ROOT / source
+    if not target.is_absolute():
+        target = ROOT / target
     if not source.is_dir():
         print(f"preview 폴더가 없습니다: {source}", file=sys.stderr)
         print(
@@ -57,7 +61,7 @@ def main(argv=None) -> int:
 
     print(f"[OK] {len(copied)}개 preview 복사 완료 -> {target}")
     for path in copied:
-        print(path.relative_to(ROOT))
+        print(path.resolve().relative_to(ROOT))
     return 0
 
 
